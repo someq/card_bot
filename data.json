@@ -1,0 +1,22 @@
+{
+    "users": [
+        {
+            "username": "Hzom1",
+            "password": "admin"
+        }
+    ],
+    "images": [
+        {
+            "url": "https://download.samplelib.com/jpeg/sample-city-park-400x300.jpg",
+            "text": "Random 1"
+        },
+        {
+            "url": "https://download.samplelib.com/jpeg/sample-clouds-400x300.jpg",
+            "text": "Random 2"
+        },
+        {
+            "url": "https://download.samplelib.com/jpeg/sample-birch-400x300.jpg",
+            "text": "Random 3"
+        }
+    ]
+}
