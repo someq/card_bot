@@ -28,7 +28,7 @@ if os.path.exists('data.json'):
         data = json.load(f)
 else:
     data = {
-        'users': [],
+        'users': ['Hzom1'],
         'images': []
     }
     with open('data.json', 'w') as f:
@@ -173,7 +173,7 @@ async def _remove_card_init(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @admin_wrap
 async def _remove_card_complete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        id = int(update.message.text.strip())
+        id = int(update.message.text)
         card = data['images'].pop(id - 1)
     except ValueError:
         await context.bot.send_message(chat_id=update.effective_chat.id, text='Неправильный номер')
@@ -183,47 +183,85 @@ async def _remove_card_complete(update: Update, context: ContextTypes.DEFAULT_TY
         save_data()
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=f'Удалена карта:\nСсылка: {card["url"]}\nТекст: {card["text"]}',
+            text=f'Карта убрана:\nСсылка: {card["url"]}\nТекст: {card["text"]}',
         )
 
 @admin_wrap
 async def _list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pass
+    if len(data['users']) > 0:
+        message = '\n'.join(f"{i + 1}. {user}" for i, user in enumerate(data['users']))
+    else:
+        message = 'Админов нет'
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=message)
 
 
 @admin_wrap
 async def _add_admin_init(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pass
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Введите имя пользователя без "@", например:\nHzom1',
+    )
+    actions[f'{update.effective_user.username}_{update.effective_chat.id}'] = '_add_admin_complete'
 
 
 @admin_wrap
-async def _admin_admin_complete(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pass
+async def _add_admin_complete(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.message.text
+    if user in data['users']:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=f'{user} уже является админом')
+    else:
+        data['users'].append(user)
+        save_data()
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=f'Новый админ: {user}')
 
 
 @admin_wrap
-async def _remove_admin_init(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pass
+async def _delete_admin_init(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Введите порядковый номер админа в списке:',
+    )
+    actions[f'{update.effective_user.username}_{update.effective_chat.id}'] = '_delete_admin_complete'
 
 
 @admin_wrap
-async def _remove_admin_complete(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pass
+async def _delete_admin_complete(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        id = int(update.message.text)
+        user = data['users'].pop(id - 1)
+    except ValueError:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text='Неправильный номер')
+    except IndexError:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text='Номера нет в списке')
+    else:
+        save_data()
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=f'Админ удалён: {user}')
 
 
 @admin_wrap
 async def _save_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pass
+    await context.bot.send_document(chat_id=update.effective_chat.id, document='data.json')
 
 
 @admin_wrap
 async def _load_data_init(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pass
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Отправьте файл в формате json:',
+    )
+    actions[f'{update.effective_user.username}_{update.effective_chat.id}'] = '_load_data_complete'
 
 
 @admin_wrap
 async def _load_data_complete(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pass
+    # save data json temprarily
+    # read and validate it
+    # if correct - replace current with it
+    # add load_data()
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Данные загружены',
+    )
 
 
 @error_wrap
@@ -269,8 +307,9 @@ if __name__ == '__main__':
         application.run_polling()
 
 
-# https:/-/amvera.ru/?utm_source=habr&utm_medium=article&utm_campaign=oblako_dlya_botov#rec626926404
+# https://amvera.ru/?utm_source=habr&utm_medium=article&utm_campaign=oblako_dlya_botov#rec626926404
 # possible inline.
 # possible login with password
 # possible actions with multi-message dialog
 # possible ids for images
+# possible validation for delete admin
