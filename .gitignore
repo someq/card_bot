@@ -1,5 +1,5 @@
 venv
 .idea
-data
+data.json
 *.pyc
 __pycache__
