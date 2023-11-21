@@ -37,7 +37,7 @@ else:
 
 def save_data():
     with open('data.json', 'w') as f:
-        json.dump(data, f)
+        json.dump(data, f, indent=2)
 
 
 def error_wrap(func, exc_types=None):
@@ -234,6 +234,8 @@ async def _delete_admin_complete(update: Update, context: ContextTypes.DEFAULT_T
     except IndexError:
         await context.bot.send_message(chat_id=update.effective_chat.id, text='Номера нет в списке')
     else:
+        if len(data['users']) < 1:
+            data['users'].append(update.effective_user.username)
         save_data()
         await context.bot.send_message(chat_id=update.effective_chat.id, text=f'Админ удалён: {user}')
 
@@ -252,16 +254,77 @@ async def _load_data_init(update: Update, context: ContextTypes.DEFAULT_TYPE):
     actions[f'{update.effective_user.username}_{update.effective_chat.id}'] = '_load_data_complete'
 
 
+def clean_data(data, user):
+    errors = []
+
+    if type(data) == dict:
+        if 'users' in data:
+            if type(data['users']) == list:
+                if len(data['users']) > 0:
+                    for i, user in enumerate(data['users']):
+                        if type(user) != str:
+                            errors.append(f'Неверное имя админа {i + 1}: {user}')
+                else:
+                    data['users'].append(user)
+            else:
+                errors.append(f'Неверный формат списка админов')
+        else:
+            errors.append('Нет списка админов')
+
+        if 'images' in data:
+            if type(data['images']) == list:
+                for i, image in enumerate(data['images']):
+                    if type(image) == dict:
+                        if 'url' in image:
+                            if type(image['url']) != str:
+                                errors.append(f'Неверный формат ссылки у карты {i + 1}: {image["url"]}')
+                        else:
+                            errors.append(f'Нет ссылки у карты {i + 1}')
+                        if 'text' in image:
+                            if type(image['text']) != str:
+                                errors.append(f'Неверный формат текста у карты {i + 1}: {image["text"]}')
+                        else:
+                            image['text'] = ''
+                    else:
+                        errors.append(f'Неверный формат карты {i + 1}')
+            else:
+                errors.append('Неверный формат списка карт')
+        else:
+            errors.append('Нет списка карт')
+    else:
+        errors.append('Неверный формат данных')
+
+    return errors
+
+
 @admin_wrap
 async def _load_data_complete(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # save data json temprarily
-    # read and validate it
-    # if correct - replace current with it
-    # add load_data()
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='Данные загружены',
-    )
+    global data
+
+    attachment = update.effective_message.effective_attachment
+
+    if getattr(attachment, 'mime_type', None) in ('application/json', 'text/plain'):
+        file = await attachment.get_file()
+        path = await file.download_to_drive()
+
+        try:
+            with open(path) as f:
+                new_data = json.load(f)
+        except json.JSONDecodeError:
+            await context.bot.send_message(chat_id=update.effective_chat.id, text='Неверный формат файла')
+        else:
+            errors = clean_data(new_data, update.effective_user.username)
+            print(new_data)
+            if errors:
+                await context.bot.send_message(chat_id=update.effective_chat.id, text='\n'.join(errors))
+            else:
+                data = new_data
+                save_data()
+                await context.bot.send_message(chat_id=update.effective_chat.id, text='Данные загружены')
+        finally:
+            os.remove(path)
+    else:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text='Неизвестный тип файла')
 
 
 @error_wrap
@@ -312,4 +375,3 @@ if __name__ == '__main__':
 # possible login with password
 # possible actions with multi-message dialog
 # possible ids for images
-# possible validation for delete admin
