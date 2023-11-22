@@ -270,7 +270,7 @@ async def _load_data_complete(update: Update, context: ContextTypes.DEFAULT_TYPE
         os.remove(path)
 
     users = [str(u) for u in new_data.get('users', [])]
-    if len(users) < 1:
+    if update.effective_user.username not in users:
         users.append(update.effective_user.username)
 
     images = [{'url': str(i.get('url')), 'text': str(i.get('text'))} for i in new_data.get('images', [])]
@@ -328,6 +328,3 @@ if __name__ == '__main__':
 
 # https://amvera.ru/?utm_source=habr&utm_medium=article&utm_campaign=oblako_dlya_botov#rec626926404
 # possible inline.
-# possible login with password
-# possible actions with multi-message dialog
-# possible ids for images
