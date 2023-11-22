@@ -3,7 +3,6 @@ import os
 import traceback as tb
 import random
 import json
-import io
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 
@@ -123,10 +122,13 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 @admin_wrap
-async def _get_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    image = random.choice(data['images'])
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=image['url'])
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=image['text'])
+async def _get_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if len(data['images']) > 0:
+        image = random.choice(data['images'])
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=image['url'])
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=image['text'])
+    else:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text='Колода пуста')
 
 
 @admin_wrap
@@ -243,7 +245,11 @@ async def _delete_admin_complete(update: Update, context: ContextTypes.DEFAULT_T
 
 @admin_wrap
 async def _save_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_document(chat_id=update.effective_chat.id, document='data.json')
+    await context.bot.send_document(
+        chat_id=update.effective_chat.id,
+        document='data.json',
+        filename=f'card_bot_data.json'
+    )
 
 
 @admin_wrap
@@ -280,7 +286,7 @@ async def _load_data_complete(update: Update, context: ContextTypes.DEFAULT_TYPE
     data = {'users': users, 'images': images}
     save_data()
 
-    context.bot.send_message(chat_id=update.effective_chat.id, text='Данные загружены')
+    await context.bot.send_message(chat_id=update.effective_chat.id, text='Данные загружены')
 
 
 @error_wrap
