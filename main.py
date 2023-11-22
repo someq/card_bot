@@ -3,6 +3,7 @@ import os
 import traceback as tb
 import random
 import json
+import io
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 
@@ -254,77 +255,32 @@ async def _load_data_init(update: Update, context: ContextTypes.DEFAULT_TYPE):
     actions[f'{update.effective_user.username}_{update.effective_chat.id}'] = '_load_data_complete'
 
 
-def clean_data(data, user):
-    errors = []
-
-    if type(data) == dict:
-        if 'users' in data:
-            if type(data['users']) == list:
-                if len(data['users']) > 0:
-                    for i, user in enumerate(data['users']):
-                        if type(user) != str:
-                            errors.append(f'Неверное имя админа {i + 1}: {user}')
-                else:
-                    data['users'].append(user)
-            else:
-                errors.append(f'Неверный формат списка админов')
-        else:
-            errors.append('Нет списка админов')
-
-        if 'images' in data:
-            if type(data['images']) == list:
-                for i, image in enumerate(data['images']):
-                    if type(image) == dict:
-                        if 'url' in image:
-                            if type(image['url']) != str:
-                                errors.append(f'Неверный формат ссылки у карты {i + 1}: {image["url"]}')
-                        else:
-                            errors.append(f'Нет ссылки у карты {i + 1}')
-                        if 'text' in image:
-                            if type(image['text']) != str:
-                                errors.append(f'Неверный формат текста у карты {i + 1}: {image["text"]}')
-                        else:
-                            image['text'] = ''
-                    else:
-                        errors.append(f'Неверный формат карты {i + 1}')
-            else:
-                errors.append('Неверный формат списка карт')
-        else:
-            errors.append('Нет списка карт')
-    else:
-        errors.append('Неверный формат данных')
-
-    return errors
-
 
 @admin_wrap
 async def _load_data_complete(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global data
-
     attachment = update.effective_message.effective_attachment
 
-    if getattr(attachment, 'mime_type', None) in ('application/json', 'text/plain'):
-        file = await attachment.get_file()
-        path = await file.download_to_drive()
+    file = await attachment.get_file()
+    path = await file.download_to_drive()
 
-        try:
-            with open(path) as f:
-                new_data = json.load(f)
-        except json.JSONDecodeError:
-            await context.bot.send_message(chat_id=update.effective_chat.id, text='Неверный формат файла')
-        else:
-            errors = clean_data(new_data, update.effective_user.username)
-            print(new_data)
-            if errors:
-                await context.bot.send_message(chat_id=update.effective_chat.id, text='\n'.join(errors))
-            else:
-                data = new_data
-                save_data()
-                await context.bot.send_message(chat_id=update.effective_chat.id, text='Данные загружены')
-        finally:
-            os.remove(path)
-    else:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text='Неизвестный тип файла')
+    try:
+        with open(path) as f:
+            new_data = json.load(f)
+    finally:
+        os.remove(path)
+
+    users = [str(u) for u in new_data.get('users', [])]
+    if len(users) < 1:
+        users.append(update.effective_user.username)
+
+    images = [{'url': str(i.get('url')), 'text': str(i.get('text'))} for i in new_data.get('images', [])]
+
+    global data
+
+    data = {'users': users, 'images': images}
+    save_data()
+
+    context.bot.send_message(chat_id=update.effective_chat.id, text='Данные загружены')
 
 
 @error_wrap
