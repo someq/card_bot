@@ -17,7 +17,6 @@ logger = logging.getLogger()
 DEBUG = os.getenv('DEBUG', '0').lower() in ('true', 'yes', 'on', '1')
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 MODE = os.getenv('TELEGRAM_MODE')
-DATA_DIR = os.getenv('DATA_DIR', 'data')
 
 if TOKEN is None:
     raise RuntimeError('Telegram token is not set.')
@@ -25,6 +24,7 @@ if TOKEN is None:
 
 actions = {}
 
+DATA_DIR = 'data'
 IMAGE_DIR = os.path.join(DATA_DIR, 'images')
 DATA_FILE = os.path.join(DATA_DIR, 'data.json')
 
@@ -309,7 +309,6 @@ async def _load_data_complete(update: Update, context: ContextTypes.DEFAULT_TYPE
             if update.effective_user.username not in data['users']:
                 data['users'].append(update.effective_user.username)
                 save_data()
-
         except Exception:
             shutil.rmtree(DATA_DIR, ignore_errors=True)
             os.rename('old_data', DATA_DIR)
@@ -318,12 +317,9 @@ async def _load_data_complete(update: Update, context: ContextTypes.DEFAULT_TYPE
                 data = json.load(f)
 
             raise
-
         else:
             shutil.rmtree('old_data', ignore_errors=True)
-
             message = 'Данные загружены'
-
         finally:
             os.remove(path)
 
