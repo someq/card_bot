@@ -3,6 +3,8 @@ import os
 import traceback as tb
 import random
 import json
+import zipfile
+import shutil
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 
@@ -15,6 +17,7 @@ logger = logging.getLogger()
 DEBUG = os.getenv('DEBUG', '0').lower() in ('true', 'yes', 'on', '1')
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 MODE = os.getenv('TELEGRAM_MODE')
+DATA_DIR = os.getenv('DATA_DIR', 'data')
 
 if TOKEN is None:
     raise RuntimeError('Telegram token is not set.')
@@ -22,21 +25,25 @@ if TOKEN is None:
 
 actions = {}
 
+IMAGE_DIR = os.path.join(DATA_DIR, 'images')
+DATA_FILE = os.path.join(DATA_DIR, 'data.json')
 
-if os.path.exists('data.json'):
-    with open('data.json') as f:
+os.makedirs(IMAGE_DIR, exist_ok=True)
+
+if os.path.exists(DATA_FILE):
+    with open(DATA_FILE) as f:
         data = json.load(f)
 else:
     data = {
         'users': ['Hzom1'],
         'images': []
     }
-    with open('data.json', 'w') as f:
+    with open(DATA_FILE, 'w') as f:
         json.dump(data, f)
 
 
 def save_data():
-    with open('data.json', 'w') as f:
+    with open(DATA_FILE, 'w') as f:
         json.dump(data, f, indent=2)
 
 
@@ -98,7 +105,7 @@ _admin_menu = InlineKeyboardMarkup([
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text="Привет, позолоти ручку?!",
+        text=f'Привет, {update.effective_user.username}',
         reply_markup=_user_menu,
     )
 
@@ -125,8 +132,11 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def _get_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(data['images']) > 0:
         image = random.choice(data['images'])
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=image['url'])
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=image['text'])
+        await context.bot.send_photo(
+            chat_id=update.effective_chat.id,
+            photo=os.path.join(IMAGE_DIR, image['name']),
+            caption=image['text'],
+        )
     else:
         await context.bot.send_message(chat_id=update.effective_chat.id, text='Колода пуста')
 
@@ -134,18 +144,18 @@ async def _get_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @admin_wrap
 async def _list_cards(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(data['images']) > 0:
-        message = '\n'.join(f"{i + 1}. {image['url']} {image['text']}" for i, image in enumerate(data['images']))
+        message = '\n'.join(f"{i + 1}. {image['name']} {image['text']}"
+                            for i, image in enumerate(data['images']))
     else:
         message = 'Колода пуста'
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=message, disable_web_page_preview=True)
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=message)
 
 
 @admin_wrap
 async def _add_card_init(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Введите ссылку на изображение и текст через пробел, например:\n'
-             'https://example.com/image.jpg Моя красивая карта',
+        text='Отправьте изображение с подписью в формате jpg, png, gif или webp:',
         disable_web_page_preview=True,
     )
     actions[f'{update.effective_user.username}_{update.effective_chat.id}'] = '_add_card_complete'
@@ -153,15 +163,22 @@ async def _add_card_init(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @admin_wrap
 async def _add_card_complete(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    parts = update.message.text.split(' ', maxsplit=1)
-    url = parts[0].strip()
-    text = parts[1].strip() if len(parts) > 1 else ""
-    data['images'].append({'url': url, 'text': text})
-    save_data()
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=f'Новая карта:\nСсылка: {url}\nТекст: {text}',
-    )
+    try:
+        attachment = update.effective_message.effective_attachment[-1]
+    except TypeError:
+        message = 'Файл отсутствует или имеет неверный формат'
+    else:
+        file = await attachment.get_file()
+        filename = str(await file.download_to_drive())
+        os.rename(filename, os.path.join(IMAGE_DIR, filename))
+        caption = update.effective_message.caption
+        if caption is None:
+            caption = ''
+        data['images'].append({'name': filename, 'text': caption})
+        save_data()
+        message = 'Карта добавлена'
+
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=message)
 
 
 @admin_wrap
@@ -176,18 +193,18 @@ async def _remove_card_init(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @admin_wrap
 async def _remove_card_complete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        id = int(update.message.text)
-        card = data['images'].pop(id - 1)
+        idx = int(update.message.text)
+        card = data['images'].pop(idx - 1)
     except ValueError:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text='Неправильный номер')
+        message = 'Неправильный номер'
     except IndexError:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text='Номера нет в списке')
+        message = 'Номера нет в списке'
     else:
+        os.remove(os.path.join(IMAGE_DIR, card['name']))
         save_data()
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f'Карта убрана:\nСсылка: {card["url"]}\nТекст: {card["text"]}',
-        )
+        message = f'Карта удалена: {card["name"]}, {card["text"]}'
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=message)
+
 
 @admin_wrap
 async def _list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -230,8 +247,8 @@ async def _delete_admin_init(update: Update, context: ContextTypes.DEFAULT_TYPE)
 @admin_wrap
 async def _delete_admin_complete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        id = int(update.message.text)
-        user = data['users'].pop(id - 1)
+        idx = int(update.message.text)
+        user = data['users'].pop(idx - 1)
     except ValueError:
         await context.bot.send_message(chat_id=update.effective_chat.id, text='Неправильный номер')
     except IndexError:
@@ -245,48 +262,70 @@ async def _delete_admin_complete(update: Update, context: ContextTypes.DEFAULT_T
 
 @admin_wrap
 async def _save_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_document(
-        chat_id=update.effective_chat.id,
-        document='data.json',
-        filename=f'card_bot_data.json'
-    )
+    filename = 'card_bot_data.zip'
+
+    with zipfile.ZipFile(filename, 'w') as f:
+        for image in data['images']:
+            f.write(os.path.join(IMAGE_DIR, image['name']), os.path.join('images', image['name']))
+        f.write(DATA_FILE, 'data.json')
+
+    try:
+        await context.bot.send_document(chat_id=update.effective_chat.id, document=filename)
+    finally:
+        os.remove(f.filename)
 
 
 @admin_wrap
 async def _load_data_init(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Отправьте файл в формате json:',
+        text='Отправьте zip архив c данными и изображениями:',
     )
     actions[f'{update.effective_user.username}_{update.effective_chat.id}'] = '_load_data_complete'
 
 
-
 @admin_wrap
 async def _load_data_complete(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    attachment = update.effective_message.effective_attachment
-
-    file = await attachment.get_file()
-    path = await file.download_to_drive()
-
-    try:
-        with open(path) as f:
-            new_data = json.load(f)
-    finally:
-        os.remove(path)
-
-    users = [str(u) for u in new_data.get('users', [])]
-    if update.effective_user.username not in users:
-        users.append(update.effective_user.username)
-
-    images = [{'url': str(i.get('url')), 'text': str(i.get('text'))} for i in new_data.get('images', [])]
-
     global data
 
-    data = {'users': users, 'images': images}
-    save_data()
+    if os.path.exists('old_data'):
+        message = 'Архив уже загружается'
+    else:
+        attachment = update.effective_message.effective_attachment
+        file = await attachment.get_file()
+        path = await file.download_to_drive()
 
-    await context.bot.send_message(chat_id=update.effective_chat.id, text='Данные загружены')
+        os.rename(DATA_DIR, 'old_data')
+
+        try:
+            with zipfile.ZipFile(path, 'r') as f:
+                f.extractall(DATA_DIR)
+
+            with open(DATA_FILE) as f:
+                data = json.load(f)
+
+            if update.effective_user.username not in data['users']:
+                data['users'].append(update.effective_user.username)
+                save_data()
+
+        except Exception:
+            shutil.rmtree(DATA_DIR, ignore_errors=True)
+            os.rename('old_data', DATA_DIR)
+
+            with open(DATA_FILE) as f:
+                data = json.load(f)
+
+            raise
+
+        else:
+            shutil.rmtree('old_data', ignore_errors=True)
+
+            message = 'Данные загружены'
+
+        finally:
+            os.remove(path)
+
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=message)
 
 
 @error_wrap
