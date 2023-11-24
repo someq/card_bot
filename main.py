@@ -228,11 +228,12 @@ async def _add_admin_init(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def _add_admin_complete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.text
     if user in data['users']:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=f'{user} уже является админом')
+        message = f'{user} уже админ'
     else:
         data['users'].append(user)
         save_data()
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=f'Новый админ: {user}')
+        message = f'Новый админ: {user}'
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=message)
 
 
 @admin_wrap
@@ -250,14 +251,15 @@ async def _delete_admin_complete(update: Update, context: ContextTypes.DEFAULT_T
         idx = int(update.message.text)
         user = data['users'].pop(idx - 1)
     except ValueError:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text='Неправильный номер')
+        message = 'Неправильный номер'
     except IndexError:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text='Номера нет в списке')
+        message = 'Номера нет в списке'
     else:
         if len(data['users']) < 1:
             data['users'].append(update.effective_user.username)
         save_data()
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=f'Админ удалён: {user}')
+        message = f'Админ удалён: {user}'
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=message)
 
 
 @admin_wrap
