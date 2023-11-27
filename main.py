@@ -141,10 +141,16 @@ def _get_card(update: Update, context: CallbackContext):
             context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=f,
-                caption=image['text'],
+                caption=f'@{update.effective_user.username}, ваша карта:\n{image["text"]}',
             )
     else:
         context.bot.send_message(chat_id=update.effective_chat.id, text='Колода пуста')
+
+
+@error_wrap
+def get_card(update: Update, context: CallbackContext):
+    print('GOT: card')
+    _get_card(update, context)
 
 
 @admin_wrap
@@ -360,11 +366,14 @@ bot.set_webhook(WEBHOOK_URL)
 update_queue = Queue()
 dp = Dispatcher(bot=bot, update_queue=update_queue)
 
-start_handler = CommandHandler('start', start)
+start_handler = CommandHandler('start', start, filters=Filters.chat_type.private)
 dp.add_handler(start_handler)
 
-admin_handler = CommandHandler('admin', admin)
+admin_handler = CommandHandler('admin', admin, filters=Filters.chat_type.private)
 dp.add_handler(admin_handler)
+
+card_handler = CommandHandler('card', get_card)
+dp.add_handler(card_handler)
 
 menu_handler = CallbackQueryHandler(menu)
 dp.add_handler(menu_handler)
@@ -372,7 +381,7 @@ dp.add_handler(menu_handler)
 action_handler = MessageHandler(~Filters.command, action)
 dp.add_handler(action_handler)
 
-unknown_handler = MessageHandler(Filters.command, unknown)
+unknown_handler = MessageHandler(Filters.command & Filters.chat_type.private, unknown)
 dp.add_handler(unknown_handler)
 
 
