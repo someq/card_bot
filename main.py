@@ -156,8 +156,10 @@ def get_card(update: Update, context: CallbackContext):
 @admin_wrap
 def _list_cards(update: Update, context: CallbackContext):
     if len(data['images']) > 0:
-        message = '\n'.join(f"{i + 1}. {image['name']} {image['text']}"
-                            for i, image in enumerate(data['images']))
+        message = '\n'.join(
+            f"{i + 1}. {image['name']} {image['text'][:40]}\u2026"
+            for i, image in enumerate(data['images'])
+        )
     else:
         message = 'Колода пуста'
     context.bot.send_message(chat_id=update.effective_chat.id, text=message)
