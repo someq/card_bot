@@ -81,7 +81,7 @@ def admin_wrap(func):
 
 _user_menu = InlineKeyboardMarkup([
     [
-        InlineKeyboardButton('Вытянуть карту', callback_data='_get_card'),
+        InlineKeyboardButton('Взять карту', callback_data='_get_card'),
     ],
 ])
 
@@ -142,6 +142,7 @@ def _get_card(update: Update, context: CallbackContext):
                 chat_id=update.effective_chat.id,
                 photo=f,
                 caption=f'@{update.effective_user.username}, ваша карта:\n{image["text"]}',
+                reply_markup=_user_menu,
             )
     else:
         context.bot.send_message(chat_id=update.effective_chat.id, text='Колода пуста')
